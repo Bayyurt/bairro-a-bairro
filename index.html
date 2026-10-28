@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Bairro a Bairro</title>
+<style>
+:root {
+  --sand:#e8d5b5; --dust:#c4a574; --terra:#b85c38; --sea:#1a7a8c; --deep:#0d3d4a;
+  --green:#2d6a4f; --gold:#d4a017; --ink:#1a1a1a; --paper:#faf6ef;
+  --brown:#6b3e26; --lblue:#7eb8c9; --pink:#d4839a; --orange:#e07a3d;
+  --red:#c23b22; --yellow:#e8c547; --dgreen:#1b4332; --dblue:#1e3a5f;
+  --p0:#e85d04; --p1:#4cc9f0;
+}
+* { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; }
+body {
+  font-family:"Segoe UI",system-ui,sans-serif;
+  background:linear-gradient(160deg,#0d3d4a,#1a5a4a 50%,#2d4a3e);
+  color:var(--ink); overflow:hidden;
+}
+button {
+  font:inherit; border:none; border-radius:12px; padding:12px 18px;
+  background:var(--gold); color:var(--ink); font-weight:700; cursor:pointer;
+}
+button:disabled { opacity:.45; cursor:default; }
+button.ghost { background:rgba(255,255,255,.15); color:var(--paper); border:1px solid rgba(255,255,255,.3); }
+button.danger { background:#c23b22; color:#fff; }
+button.ok { background:var(--green); color:#fff; }
+
+.screen { display:none; position:fixed; inset:0; flex-direction:column; align-items:center; justify-content:center; padding:16px; overflow:auto; }
+.screen.on { display:flex; }
+
+/* ---- Title ---- */
+#title { color:var(--paper); text-align:center; gap:14px; }
+#title h1 { font-size:clamp(1.8rem,7vw,2.6rem); text-shadow:0 2px 10px rgba(0,0,0,.4); }
+#title .sub { opacity:.85; max-width:320px; line-height:1.4; }
+#title .setup { background:rgba(0,0,0,.25); border-radius:16px; padding:16px; width:min(100%,340px); text-align:left; }
+#title label { display:block; font-size:.8rem; opacity:.8; margin:10px 0 4px; }
+#title input {
+  width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.1); color:var(--paper); font-size:1rem;
+}
+#title .row { display:flex; gap:8px; margin-top:16px; }
+#title .row button { flex:1; }
+.dot { display:inline-block; width:12px; height:12px; border-radius:50%; vertical-align:middle; margin-right:6px; }
+.dot.p0 { background:var(--p0); } .dot.p1 { background:var(--p1); }
+
+/* ---- Game ---- */
+#game { padding:0; justify-content:flex-start; overflow:hidden; }
+.topbar {
+  width:100%; display:flex; gap:8px; padding:8px 10px; background:rgba(0,0,0,.35);
+  color:var(--paper); font-size:.78rem; align-items:stretch; flex-shrink:0;
+}
+.hud-player {
+  flex:1; border-radius:10px; padding:6px 8px; background:rgba(255,255,255,.08);
+  border:2px solid transparent;
+}
+.hud-player.active { border-color:var(--gold); background:rgba(212,160,23,.2); }
+.hud-player .nm { font-weight:700; font-size:.85rem; }
+.hud-player .kz { color:var(--gold); font-weight:700; }
+.hud-meta { text-align:right; min-width:72px; display:flex; flex-direction:column; justify-content:center; opacity:.9; }
+
+.board-wrap {
+  width:min(100vw,100vh - 180px); aspect-ratio:1; margin:6px auto; flex-shrink:0;
+  max-width:520px;
+}
+.board {
+  width:100%; height:100%;
+  display:grid;
+  grid-template-columns:1.3fr repeat(9,1fr) 1.3fr;
+  grid-template-rows:1.3fr repeat(9,1fr) 1.3fr;
+  background:var(--sand); border:3px solid var(--deep); border-radius:6px;
+  box-shadow:0 8px 28px rgba(0,0,0,.4); overflow:hidden; position:relative;
+}
+.cell {
+  border:1px solid rgba(13,61,74,.22); background:var(--paper);
+  font-size:clamp(4px,1.35vw,8px); line-height:1.1; padding:1px;
+  display:flex; flex-direction:column; justify-content:flex-start; position:relative; overflow:hidden;
+}
+.cell .stripe { height:18%; min-height:4px; margin:-1px -1px 1px; }
+.cell .name { font-weight:700; padding:0 1px; }
+.cell .price { opacity:.7; font-size:.85em; }
+.cell .tokens {
+  position:absolute; bottom:1px; left:1px; right:1px; display:flex; gap:1px; justify-content:center; flex-wrap:wrap;
+}
+.tok {
+  width:clamp(8px,2.2vw,14px); height:clamp(8px,2.2vw,14px); border-radius:50%;
+  border:1.5px solid #fff; box-shadow:0 1px 2px rgba(0,0,0,.4);
+}
+.tok.p0 { background:var(--p0); } .tok.p1 { background:var(--p1); }
+.owner-mark {
+  position:absolute; top:2px; right:2px; width:6px; height:6px; border-radius:50%; border:1px solid #fff;
+}
+.corner {
+  background:var(--deep); color:var(--paper); align-items:center; justify-content:center;
+  text-align:center; font-weight:800; font-size:clamp(5px,1.5vw,9px);
+}
+.center {
+  grid-column:2/11; grid-row:2/11;
+  background:linear-gradient(145deg,#f0e6d4,#dcc9a8);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding:6%; gap:4px; border:none;
+}
+.center h2 { font-size:clamp(.85rem,3.5vw,1.4rem); color:var(--deep); }
+.center .log {
+  width:100%; max-height:45%; overflow:auto; font-size:clamp(7px,1.8vw,11px);
+  text-align:left; background:rgba(255,255,255,.55); border-radius:8px; padding:6px; color:#333;
+}
+.center .log div { margin-bottom:3px; border-bottom:1px solid rgba(0,0,0,.06); padding-bottom:2px; }
+.g-brown .stripe{background:var(--brown)} .g-lblue .stripe{background:var(--lblue)}
+.g-pink .stripe{background:var(--pink)} .g-orange .stripe{background:var(--orange)}
+.g-red .stripe{background:var(--red)} .g-yellow .stripe{background:var(--yellow)}
+.g-green .stripe{background:var(--dgreen)} .g-dblue .stripe{background:var(--dblue)}
+.special.sorte{background:#d4edda} .special.azar{background:#f8d7da}
+.special.mercado{background:#fff3cd} .special.util{background:#d1ecf1}
+.special.tax{background:#e2d5c3} .special.trans{background:#d1ecf1}
+
+.controls {
+  width:100%; max-width:520px; padding:8px 10px 14px; display:flex; flex-direction:column; gap:8px; flex-shrink:0;
+}
+.dice-row { display:flex; align-items:center; gap:10px; color:var(--paper); }
+.die {
+  width:42px; height:42px; background:#fff; border-radius:8px; display:flex; align-items:center;
+  justify-content:center; font-size:1.4rem; font-weight:800; color:var(--deep);
+  box-shadow:0 2px 6px rgba(0,0,0,.3);
+}
+.act-row { display:flex; gap:8px; flex-wrap:wrap; }
+.act-row button { flex:1; min-width:100px; padding:14px 12px; font-size:1rem; }
+.msg {
+  color:var(--paper); font-size:.85rem; min-height:1.2em; text-align:center; opacity:.95;
+}
+
+/* ---- Modal ---- */
+.modal-bg {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:20;
+  align-items:center; justify-content:center; padding:16px;
+}
+.modal-bg.on { display:flex; }
+.modal {
+  background:var(--paper); border-radius:18px; padding:20px; width:min(100%,360px);
+  box-shadow:0 12px 40px rgba(0,0,0,.45); text-align:center;
+}
+.modal h3 { color:var(--deep); margin-bottom:8px; font-size:1.2rem; }
+.modal p { font-size:.95rem; line-height:1.4; margin-bottom:14px; color:#333; }
+.modal .btns { display:flex; gap:8px; }
+.modal .btns button { flex:1; }
+.modal.sorte { border-top:6px solid #2d6a4f; }
+.modal.azar { border-top:6px solid #c23b22; }
+.modal.buy { border-top:6px solid var(--gold); }
+
+/* ---- Winner ---- */
+#winner { color:var(--paper); text-align:center; gap:12px; }
+#winner h1 { font-size:clamp(1.6rem,6vw,2.4rem); }
+#winner .score { background:rgba(0,0,0,.25); border-radius:14px; padding:14px; width:min(100%,320px); }
+#winner .score div { margin:6px 0; font-size:1rem; }
+</style>
+</head>
+<body>
+
+<!-- TITLE -->
+<section id="title" class="screen on">
+  <h1>Bairro a Bairro</h1>
+  <p class="sub">Negócios de rua em Luanda. Compra bairros, cobra renda, sobrevive ao apagão.</p>
+  <div class="setup">
+    <label><span class="dot p0"></span>Jogador 1</label>
+    <input id="n0" type="text" maxlength="16" value="Vado" autocomplete="off" />
+    <label><span class="dot p1"></span>Jogador 2</label>
+    <input id="n1" type="text" maxlength="16" value="Nelsa" autocomplete="off" />
+    <div class="row">
+      <button type="button" id="btnStart">Jogar</button>
+    </div>
+    <p style="font-size:.72rem;opacity:.7;margin-top:10px;line-height:1.35">
+      2 jogadores · telefone partilhado · 30 turnos ou falência · começa com 1.500.000 Kz
+    </p>
+  </div>
+</section>
+
+<!-- GAME -->
+<section id="game" class="screen">
+  <div class="topbar">
+    <div class="hud-player" id="hud0"><div class="nm"><span class="dot p0"></span><span id="hudN0">—</span></div><div class="kz" id="hudK0">—</div></div>
+    <div class="hud-meta"><div id="hudTurn">Turno 1/30</div><div id="hudWho">—</div></div>
+    <div class="hud-player" id="hud1"><div class="nm"><span class="dot p1"></span><span id="hudN1">—</span></div><div class="kz" id="hudK1">—</div></div>
+  </div>
+  <div class="board-wrap"><div class="board" id="board"></div></div>
+  <div class="controls">
+    <div class="msg" id="msg">Rola os dados.</div>
+    <div class="dice-row">
+      <div class="die" id="d1">?</div>
+      <div class="die" id="d2">?</div>
+      <span id="diceSum" style="font-weight:700"></span>
+    </div>
+    <div class="act-row">
+      <button type="button" id="btnRoll">Rolar</button>
+      <button type="button" class="ghost" id="btnEnd" disabled>Passar turno</button>
+    </div>
+  </div>
+</section>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modal">
+    <h3 id="modalTitle"></h3>
+    <p id="modalBody"></p>
+    <div class="btns" id="modalBtns"></div>
+  </div>
+</div>
+
+<!-- WINNER -->
+<section id="winner" class="screen">
+  <h1 id="winTitle">Fim de jogo</h1>
+  <p id="winReason" class="sub"></p>
+  <div class="score" id="winScore"></div>
+  <button type="button" id="btnAgain">Jogar outra vez</button>
+</section>
+
+<script>
+(function(){
+"use strict";
+
+const START = 1500000;
+const SALARIO = 200000;
+const MAX_TURNS = 30; // rounds (both players)
+
+const COLORS = {
+  brown:["Rocha Pinto","Capalanga"],
+  lblue:["Cazenga","Tala Hady","Hoji-ya-Henda"],
+  pink:["Viana","Belas","Kilamba"],
+  orange:["Sambizanga","Rangel","Maianga"],
+  red:["Baixa","Ingombota","Kinanga"],
+  yellow:["Marginal","Ilha do Cabo","Mussulo"],
+  green:["Miramar","Talatona","Alvalade"],
+  dblue:["Maculusso","Patriota"]
+};
+
+// price in Kz
+const SPACES = [
+  {t:"corner", name:"PARTIDA", id:"partida"},
+  {t:"prop", g:"brown", name:"Rocha Pinto", price:60000},
+  {t:"sorte", name:"SORTE"},
+  {t:"prop", g:"brown", name:"Capalanga", price:60000},
+  {t:"tax", name:"Imposto Municipal", amount:100000},
+  {t:"trans", name:"Candongueiro Norte", price:200000},
+  {t:"prop", g:"lblue", name:"Cazenga", price:100000},
+  {t:"azar", name:"AZAR"},
+  {t:"prop", g:"lblue", name:"Tala Hady", price:100000},
+  {t:"prop", g:"lblue", name:"Hoji-ya-Henda", price:120000},
+  {t:"corner", name:"CADEIA DA BAÍA", id:"cadeia"},
+  {t:"prop", g:"pink", name:"Viana", price:140000},
+  {t:"util", name:"Rede Luz", price:150000},
+  {t:"prop", g:"pink", name:"Belas", price:140000},
+  {t:"prop", g:"pink", name:"Kilamba", price:160000},
+  {t:"trans", name:"Candongueiro Sul", price:200000},
+  {t:"prop", g:"orange", name:"Sambizanga", price:180000},
+  {t:"sorte", name:"SORTE"},
+  {t:"prop", g:"orange", name:"Rangel", price:180000},
+  {t:"prop", g:"orange", name:"Maianga", price:200000},
+  {t:"corner", name:"ESTACIONAMENTO", id:"livre"},
+  {t:"prop", g:"red", name:"Baixa", price:220000},
+  {t:"azar", name:"AZAR"},
+  {t:"prop", g:"red", name:"Ingombota", price:220000},
+  {t:"prop", g:"red", name:"Kinanga", price:240000},
+  {t:"trans", name:"Barco da Ilha", price:200000},
+  {t:"prop", g:"yellow", name:"Marginal", price:260000},
+  {t:"prop", g:"yellow", name:"Ilha do Cabo", price:260000},
+  {t:"util", name:"Água Clara", price:150000},
+  {t:"prop", g:"yellow", name:"Mussulo", price:280000},
+  {t:"corner", name:"GUARDA DA BAÍA", id:"guarda"},
+  {t:"prop", g:"green", name:"Miramar", price:300000},
+  {t:"prop", g:"green", name:"Talatona", price:300000},
+  {t:"mercado", name:"Mercado do Roque"},
+  {t:"prop", g:"green", name:"Alvalade", price:320000},
+  {t:"trans", name:"Autocarro Expresso", price:200000},
+  {t:"sorte", name:"SORTE"},
+  {t:"prop", g:"dblue", name:"Maculusso", price:350000},
+  {t:"tax", name:"APAGÃO", amount:80000, apagao:true},
+  {t:"prop", g:"dblue", name:"Patriota", price:400000}
+];
+
+const SORTE = [
+  {txt:"Candongueiro chegou cedo — recebe 100.000 Kz.", fn:p=>addCash(p,100000)},
+  {txt:"Cliente fixo no mercado — recebe 150.000 Kz.", fn:p=>addCash(p,150000)},
+  {txt:"Herança de um tio no Huambo — recebe 200.000 Kz.", fn:p=>addCash(p,200000)},
+  {txt:"Desconto na renda da casa — recebe 80.000 Kz.", fn:p=>addCash(p,80000)},
+  {txt:"Avança para a Partida e recebe salário.", fn:p=>{p.pos=0; addCash(p,SALARIO); renderBoard();}},
+  {txt:"Vizinhos fazem vaquinha — recebe 50.000 Kz de cada rival.", fn:p=>{
+    const o=1-p; if(G.players[o].cash>0){ const a=Math.min(50000,G.players[o].cash); G.players[o].cash-=a; p.cash+=a; }
+  }},
+  {txt:"Venda de peixe na Ilha — recebe 120.000 Kz.", fn:p=>addCash(p,120000)},
+  {txt:"Contrato de pintura num prédio — recebe 180.000 Kz.", fn:p=>addCash(p,180000)}
+];
+const AZAR = [
+  {txt:"Apagão na Marginal — paga 80.000 Kz à Caixa.", fn:p=>payBank(p,80000)},
+  {txt:"Multa da Guarda da Baía — 150.000 Kz.", fn:p=>payBank(p,150000)},
+  {txt:"Pneu furado no candongueiro — paga 60.000 Kz.", fn:p=>payBank(p,60000)},
+  {txt:"Chuva estraga a banca — paga 100.000 Kz.", fn:p=>payBank(p,100000)},
+  {txt:"Vai à Cadeia da Baía (só a visitar… desta vez pagas 50.000 Kz).", fn:p=>{p.pos=10; payBank(p,50000); renderBoard();}},
+  {txt:"Taxa escolar surpresa — paga 90.000 Kz.", fn:p=>payBank(p,90000)},
+  {txt:"Gerador avariado — paga 70.000 Kz.", fn:p=>payBank(p,70000)},
+  {txt:"Pagamento atrasado a um fornecedor — paga 110.000 Kz.", fn:p=>payBank(p,110000)}
+];
+
+function fmt(n){
+  n=Math.floor(n);
+  if(n>=1000000) return (n/1000000).toFixed(n%1000000===0?0:1).replace(".",",")+"M Kz";
+  if(n>=1000) return Math.round(n/1000)+"k Kz";
+  return n+" Kz";
+}
+function fmtFull(n){
+  return Math.floor(n).toLocaleString("pt-PT")+" Kz";
+}
+
+let G = null;
+let pendingEnd = false;
+let lastDice = 0;
+
+function addCash(p, amt){ p.cash += amt; }
+function payBank(p, amt){
+  const a = Math.min(amt, p.cash);
+  p.cash -= a;
+  G.caixa += a;
+  return a;
+}
+function payPlayer(from, to, amt){
+  const a = Math.min(amt, from.cash);
+  from.cash -= a;
+  to.cash += a;
+  return a;
+}
+
+function ownsGroup(pi, g){
+  const names = COLORS[g];
+  return names.every(n=>{
+    const i = SPACES.findIndex(s=>s.name===n);
+    return G.owner[i]===pi;
+  });
+}
+function baseRent(idx){
+  const s = SPACES[idx];
+  if(s.t==="prop") return Math.round(s.price * 0.12);
+  if(s.t==="trans"){
+    const owned = [5,15,25,35].filter(i=>G.owner[i]===G.owner[idx]).length;
+    return 25000 * owned;
+  }
+  if(s.t==="util"){
+    const owned = [12,28].filter(i=>G.owner[i]===G.owner[idx]).length;
+    return lastDice * (owned===2 ? 20000 : 8000);
+  }
+  return 0;
+}
+function rentDue(idx, payer){
+  const own = G.owner[idx];
+  if(own==null || own===payer) return 0;
+  const s = SPACES[idx];
+  let r = baseRent(idx);
+  if(s.t==="prop" && ownsGroup(own, s.g)) r *= 2;
+  return r;
+}
+
+function log(msg){
+  G.log.unshift(msg);
+  if(G.log.length>40) G.log.pop();
+  const el = document.getElementById("centerLog");
+  if(el) el.innerHTML = G.log.slice(0,8).map(x=>"<div>"+x+"</div>").join("");
+}
+
+function posToGrid(i){
+  if(i<=10) return {c:i+1, r:11};
+  if(i<=20) return {c:11, r:11-(i-10)};
+  if(i<=30) return {c:11-(i-20), r:1};
+  return {c:1, r:1+(i-30)};
+}
+
+function buildBoard(){
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  const center = document.createElement("div");
+  center.className = "center";
+  center.innerHTML = "<h2>Bairro a Bairro</h2><div class=\"log\" id=\"centerLog\"></div>";
+  board.appendChild(center);
+
+  SPACES.forEach((s,i)=>{
+    const {c,r} = posToGrid(i);
+    const el = document.createElement("div");
+    let cls = "cell";
+    if(s.t==="corner") cls += " corner";
+    else if(s.t==="prop") cls += " g-"+s.g;
+    else if(s.t==="sorte") cls += " special sorte";
+    else if(s.t==="azar") cls += " special azar";
+    else if(s.t==="mercado") cls += " special mercado";
+    else if(s.t==="util"||s.t==="trans") cls += " special util";
+    else if(s.t==="tax") cls += " special tax";
+    el.className = cls;
+    el.style.gridColumn = c;
+    el.style.gridRow = r;
+    el.dataset.i = i;
+    if(s.t==="corner"){
+      el.innerHTML = "<div>"+s.name+"</div>";
+    } else if(s.t==="prop"){
+      el.innerHTML = "<div class=\"stripe\"></div><div class=\"name\">"+s.name+"</div><div class=\"price\">"+fmt(s.price)+"</div><div class=\"tokens\"></div>";
+    } else {
+      const pr = s.price ? fmt(s.price) : (s.amount?"−"+fmt(s.amount):"");
+      el.innerHTML = "<div class=\"name\">"+s.name+"</div><div class=\"price\">"+pr+"</div><div class=\"tokens\"></div>";
+    }
+    if(s.t==="corner"){
+      const tok = document.createElement("div");
+      tok.className = "tokens";
+      el.appendChild(tok);
+    }
+    board.appendChild(el);
+  });
+}
+
+function renderBoard(){
+  document.querySelectorAll(".cell .tokens").forEach(t=>t.innerHTML="");
+  document.querySelectorAll(".owner-mark").forEach(m=>m.remove());
+  G.players.forEach((p,pi)=>{
+    const cell = document.querySelector('.cell[data-i="'+p.pos+'"]');
+    if(!cell) return;
+    let tokBox = cell.querySelector(".tokens");
+    if(!tokBox){ tokBox=document.createElement("div"); tokBox.className="tokens"; cell.appendChild(tokBox); }
+    const t = document.createElement("div");
+    t.className = "tok p"+pi;
+    tokBox.appendChild(t);
+  });
+  G.owner.forEach((own,i)=>{
+    if(own==null) return;
+    const cell = document.querySelector('.cell[data-i="'+i+'"]');
+    if(!cell) return;
+    const m = document.createElement("div");
+    m.className = "owner-mark";
+    m.style.background = own===0 ? "var(--p0)" : "var(--p1)";
+    cell.appendChild(m);
+  });
+  updateHud();
+}
+
+function updateHud(){
+  G.players.forEach((p,i)=>{
+    document.getElementById("hudN"+i).textContent = p.name;
+    document.getElementById("hudK"+i).textContent = fmtFull(p.cash);
+    document.getElementById("hud"+i).classList.toggle("active", i===G.cur && !G.over);
+  });
+  document.getElementById("hudTurn").textContent = "Turno "+Math.min(G.round,MAX_TURNS)+"/"+MAX_TURNS;
+  document.getElementById("hudWho").textContent = G.over ? "Fim" : G.players[G.cur].name;
+}
+
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));
+  document.getElementById(id).classList.add("on");
+}
+
+function modal(opts){
+  return new Promise(resolve=>{
+    const bg = document.getElementById("modalBg");
+    const box = document.getElementById("modal");
+    document.getElementById("modalTitle").textContent = opts.title||"";
+    document.getElementById("modalBody").textContent = opts.body||"";
+    box.className = "modal"+(opts.cls?" "+opts.cls:"");
+    const btns = document.getElementById("modalBtns");
+    btns.innerHTML = "";
+    (opts.buttons||[{label:"OK",val:true,cls:"ok"}]).forEach(b=>{
+      const btn = document.createElement("button");
+      btn.type="button";
+      btn.textContent = b.label;
+      if(b.cls) btn.className = b.cls;
+      btn.onclick = ()=>{ bg.classList.remove("on"); resolve(b.val); };
+      btns.appendChild(btn);
+    });
+    bg.classList.add("on");
+  });
+}
+
+function setMsg(t){ document.getElementById("msg").textContent = t; }
+
+function startGame(){
+  const n0 = (document.getElementById("n0").value||"Jogador 1").trim().slice(0,16);
+  const n1 = (document.getElementById("n1").value||"Jogador 2").trim().slice(0,16);
+  G = {
+    players:[
+      {name:n0, cash:START, pos:0, bankrupt:false},
+      {name:n1, cash:START, pos:0, bankrupt:false}
+    ],
+    owner: SPACES.map(()=>null),
+    cur:0,
+    round:1,
+    caixa:0,
+    log:[],
+    over:false,
+    rolled:false
+  };
+  pendingEnd=false;
+  buildBoard();
+  renderBoard();
+  log("Partida começada. Boa sorte!");
+  setMsg(G.players[0].name+", rola os dados.");
+  document.getElementById("btnRoll").disabled=false;
+  document.getElementById("btnEnd").disabled=true;
+  document.getElementById("d1").textContent="?";
+  document.getElementById("d2").textContent="?";
+  document.getElementById("diceSum").textContent="";
+  showScreen("game");
+}
+
+async function doRoll(){
+  if(!G||G.over||G.rolled) return;
+  const p = G.players[G.cur];
+  const a = 1+Math.floor(Math.random()*6);
+  const b = 1+Math.floor(Math.random()*6);
+  lastDice = a+b;
+  document.getElementById("d1").textContent=a;
+  document.getElementById("d2").textContent=b;
+  document.getElementById("diceSum").textContent="= "+lastDice;
+  G.rolled=true;
+  document.getElementById("btnRoll").disabled=true;
+
+  const from = p.pos;
+  let steps = lastDice;
+  // animate step by step quickly
+  setMsg("A mover…");
+  for(let s=0;s<steps;s++){
+    p.pos = (p.pos+1)%40;
+    if(p.pos===0){
+      addCash(p, SALARIO);
+      log(p.name+" passou a Partida (+"+fmt(SALARIO)+")");
+    }
+    renderBoard();
+    await wait(70);
+  }
+  log(p.name+" tirou "+lastDice+" → "+SPACES[p.pos].name);
+  await resolveSpace(G.cur);
+  checkBankrupt();
+  if(G.over) return;
+  document.getElementById("btnEnd").disabled=false;
+  setMsg("Passa o telefone ou toca em Passar turno.");
+  updateHud();
+}
+
+function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function resolveSpace(pi){
+  const p = G.players[pi];
+  const s = SPACES[p.pos];
+  const idx = p.pos;
+
+  if(s.t==="prop"||s.t==="trans"||s.t==="util"){
+    const own = G.owner[idx];
+    if(own==null){
+      if(p.cash >= s.price){
+        const buy = await modal({
+          cls:"buy",
+          title:s.name,
+          body:"Comprar por "+fmtFull(s.price)+"? Tens "+fmtFull(p.cash)+".",
+          buttons:[
+            {label:"Comprar", val:true, cls:"ok"},
+            {label:"Não", val:false, cls:"ghost"}
+          ]
+        });
+        if(buy){
+          p.cash -= s.price;
+          G.owner[idx] = pi;
+          log(p.name+" comprou "+s.name);
+          renderBoard();
+        } else {
+          log(p.name+" não comprou "+s.name);
+        }
+      } else {
+        await modal({title:s.name, body:"Não tens Kz suficientes ("+fmtFull(s.price)+").", buttons:[{label:"OK",val:1,cls:"ok"}]});
+      }
+    } else if(own!==pi){
+      const r = rentDue(idx, pi);
+      const paid = payPlayer(p, G.players[own], r);
+      log(p.name+" pagou "+fmt(paid)+" de renda a "+G.players[own].name);
+      await modal({title:"Renda", body:"Pagas "+fmtFull(paid)+" a "+G.players[own].name+" por "+s.name+".", buttons:[{label:"OK",val:1,cls:"ok"}]});
+    } else {
+      setMsg("A tua propriedade.");
+    }
+    return;
+  }
+
+  if(s.t==="sorte"){
+    const card = SORTE[Math.floor(Math.random()*SORTE.length)];
+    await modal({cls:"sorte", title:"SORTE", body:card.txt, buttons:[{label:"Boa!",val:1,cls:"ok"}]});
+    card.fn(p);
+    log("Sorte: "+card.txt);
+    renderBoard();
+    return;
+  }
+  if(s.t==="azar"){
+    const card = AZAR[Math.floor(Math.random()*AZAR.length)];
+    await modal({cls:"azar", title:"AZAR", body:card.txt, buttons:[{label:"Ui…",val:1,cls:"danger"}]});
+    card.fn(p);
+    log("Azar: "+card.txt);
+    renderBoard();
+    return;
+  }
+  if(s.t==="tax"){
+    const amt = s.amount||80000;
+    const paid = payBank(p, amt);
+    const title = s.apagao ? "APAGÃO" : s.name;
+    await modal({title, body:"Pagas "+fmtFull(paid)+" à Caixa Comunitária.", buttons:[{label:"OK",val:1,cls:"ok"}]});
+    log(p.name+" pagou "+fmt(paid)+" ("+title+")");
+    return;
+  }
+  if(s.t==="mercado"){
+    // 50/50 collect or pay 50k
+    if(Math.random()<0.55){
+      addCash(p,50000);
+      await modal({title:"Mercado do Roque", body:"Vendeste bem! +50.000 Kz.", buttons:[{label:"OK",val:1,cls:"ok"}]});
+      log(p.name+" +50k no Mercado");
+    } else {
+      payBank(p,50000);
+      await modal({title:"Mercado do Roque", body:"Taxa da banca —50.000 Kz.", buttons:[{label:"OK",val:1,cls:"ok"}]});
+      log(p.name+" −50k no Mercado");
+    }
+    return;
+  }
+  if(s.id==="guarda"){
+    const choice = await modal({
+      title:"Guarda da Baía",
+      body:"Pagas multa de 100.000 Kz ou puxas Azar?",
+      buttons:[
+        {label:"Pagar 100k", val:"pay", cls:"ok"},
+        {label:"Puxar Azar", val:"azar", cls:"danger"}
+      ]
+    });
+    if(choice==="pay"){
+      payBank(p,100000);
+      log(p.name+" pagou multa à Guarda");
+    } else {
+      const card = AZAR[Math.floor(Math.random()*AZAR.length)];
+      await modal({cls:"azar", title:"AZAR", body:card.txt, buttons:[{label:"Ui…",val:1,cls:"danger"}]});
+      card.fn(p);
+      log("Azar (Guarda): "+card.txt);
+      renderBoard();
+    }
+    return;
+  }
+  if(s.id==="partida"){
+    // landing exactly on start — salário already if passed; if started turn elsewhere and land: give half? Design: collect on pass. Exact land: still salute.
+    setMsg("Partida!");
+    return;
+  }
+  // cadeia / livre
+  setMsg(s.name+" — descanso.");
+}
+
+function checkBankrupt(){
+  G.players.forEach(p=>{
+    if(p.cash<=0 && !p.bankrupt){
+      // force sell nothing in v1 — bankrupt
+      p.bankrupt = true;
+      p.cash = 0;
+      // release properties
+      G.owner = G.owner.map(o=> o===G.players.indexOf(p)?null:o);
+    }
+  });
+  const alive = G.players.filter(p=>!p.bankrupt);
+  if(alive.length===1){
+    endGame("Falência — "+alive[0].name+" venceu!");
+  }
+}
+
+function endTurn(){
+  if(!G||G.over||!G.rolled) return;
+  const was = G.cur;
+  G.cur = 1 - G.cur;
+  G.rolled = false;
+  if(G.cur===0){
+    G.round++;
+    if(G.round > MAX_TURNS){
+      endGame("Acabaram os 30 turnos.");
+      return;
+    }
+  }
+  if(G.players[G.cur].bankrupt){
+    // skip
+    G.cur = 1 - G.cur;
+  }
+  document.getElementById("btnRoll").disabled=false;
+  document.getElementById("btnEnd").disabled=true;
+  document.getElementById("d1").textContent="?";
+  document.getElementById("d2").textContent="?";
+  document.getElementById("diceSum").textContent="";
+  setMsg(G.players[G.cur].name+", é a tua vez — rola.");
+  updateHud();
+  log("Vez de "+G.players[G.cur].name);
+}
+
+function netWorth(pi){
+  const p = G.players[pi];
+  let w = p.cash;
+  G.owner.forEach((o,i)=>{
+    if(o===pi && SPACES[i].price) w += SPACES[i].price;
+  });
+  return w;
+}
+
+function endGame(reason){
+  G.over = true;
+  document.getElementById("btnRoll").disabled=true;
+  document.getElementById("btnEnd").disabled=true;
+  const scores = G.players.map((p,i)=>({i, name:p.name, cash:p.cash, net:netWorth(i), bankrupt:p.bankrupt}));
+  scores.sort((a,b)=> (a.bankrupt? -1e15:a.net) < (b.bankrupt?-1e15:b.net) ? 1 : -1);
+  // fix sort
+  scores.sort((a,b)=>{
+    if(a.bankrupt!==b.bankrupt) return a.bankrupt?1:-1;
+    return b.net - a.net;
+  });
+  const win = scores[0];
+  document.getElementById("winTitle").textContent = win.name+" venceu!";
+  document.getElementById("winReason").textContent = reason;
+  document.getElementById("winScore").innerHTML = scores.map(s=>
+    "<div><span class=\"dot p"+s.i+"\"></span><strong>"+s.name+"</strong> — "+
+    (s.bankrupt?"quebrado":fmtFull(s.net)+" (património)")+"</div>"
+  ).join("");
+  showScreen("winner");
+}
+
+document.getElementById("btnStart").onclick = startGame;
+document.getElementById("btnRoll").onclick = ()=>doRoll();
+document.getElementById("btnEnd").onclick = endTurn;
+document.getElementById("btnAgain").onclick = ()=>showScreen("title");
+
+// debug / screenshot helpers
+window.__BAB = {
+  getG: ()=>G,
+  setG: (g)=>{ G=g; },
+  startGame, renderBoard, buildBoard, endGame, modal, log, updateHud, showScreen, fmtFull, SPACES, SORTE, AZAR, START, SALARIO, MAX_TURNS, netWorth
+};
+
+})();
+</script>
+</body>
+</html>
